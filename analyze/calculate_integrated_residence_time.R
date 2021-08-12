@@ -5,13 +5,13 @@ library(tidyverse)
 setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
 
 # load data: ####
-# dat <- read_csv('phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv')
-# site_dat = readRDS('phil_powell_data/lotic_site_info_filtered.rds') %>%
+# dat <- read_csv('data/phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv')
+# site_dat = readRDS('data/phil_powell_data/lotic_site_info_filtered.rds') %>%
 #   as_tibble() %>%
 #   select(sitecode = Site_ID, Lat, Lon,
 #          Stream_PAR_sum, Disch_ar1, Disch_skew, MOD_ann_NPP, Width)
-# make example dataset
-# d <- read_csv('powell_data_import/model_inputs/all_powell_data01.csv') %>%
+# # make example dataset
+# d <- read_csv('data/powell_data_import/model_inputs/all_powell_data01.csv') %>%
 #   mutate(sitecode = str_replace(siteID, '-', '_')) %>%
 #   select(-siteID)
 # w <- which(d$sitecode %in% site_dat$sitecode)[1]
@@ -27,31 +27,37 @@ setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
 #                                                        'apparent solar')) %>%
 #   select(-dateTimeUTC) %>%
 #   arrange(solar_time)
-# mod <- read_csv('powell_data_import/compiled_daily_model_results.csv') %>%
+# mod <- read_csv('data/powell_data_import/compiled_daily_model_results.csv') %>%
 #   filter(site_name == ss) %>%
 #   select(date, K600)
 # 
 # s <- s %>%
 #   mutate(date = as.Date(solar_time)) %>%
 #   left_join(mod, by = 'date') %>%
-#   select(datetime = solar_time, depth_m = Depth_m, 
-#          discharge_m3s = Discharge_m3s, width_m, K600)
+#   select(datetime = solar_time, depth_m = Depth_m,
+#          discharge_m3s = Discharge_m3s, width_m, K600, temp.water = WaterTemp_C)
 # write_csv(s, 'data/example_iTR_calculation_site.csv')
 # dat <- read_csv('data/example_iTR_calculation_site.csv', guess_max = 100000)
 # dat <- dat[14961:nrow(dat),]
+
+
 # Function to calculate iTR
 # dataframe must contain columns: width_m, depth_m, discharge_m3s, K600
 # and datetime in either local or solar time.
 
-# calculate reach length as 3v/K, because we are interested in metabolism and 
+# calculate reach length as 3v/KO2, because we are interested in metabolism and 
 #   oxygen as response variables and this captures the length of 90% turnover?
 #   diChappro 1992 I believe
-## Ask Bob if this should be K600, Ko2, k?
+## This should be Ko2 in the calculation (d-1)
+
 calculate_iTR <- function(dat, lotic_th = 2.894e-5, 
                           lentic_th = 1.157e-3 ){
   if(!('velocity_ms' %in% colnames(dat))) {
     dat$velocity_ms <- NA_real_
   }
+  
+
+  
   d <- dat %>%
     mutate(velocity_ms = zoo::na.approx(velocity_ms, maxgap = 96, na.rm = F),
            velocity_ms = ifelse(!is.na(velocity_ms), velocity_ms, 
@@ -60,7 +66,10 @@ calculate_iTR <- function(dat, lotic_th = 2.894e-5,
            depth_m = zoo::na.approx(depth_m, maxgap = 96, na.rm = F),
            width_m = zoo::na.approx(width_m, maxgap = 96, na.rm = F),
            discharge_m3s = zoo::na.approx(discharge_m3s, maxgap = 96, na.rm = F),
-           reach_length_m = 3 * velocity_ms/K600 * 60 * 60 * 24, # s/d
+           k600 = K600 * depth_m,
+           kO2 = streamMetabolizer::convert_k600_to_kGAS(k600, temp.water),
+           KO2 = kO2/depth_m,
+           reach_length_m = 3 * velocity_ms/KO2 * 60 * 60 * 24, # s/d
            volume_m3 = width_m * reach_length_m * depth_m, 
            discharge_vol = discharge_m3s * 60 * 15,
            date = as.Date(datetime))
@@ -71,18 +80,22 @@ calculate_iTR <- function(dat, lotic_th = 2.894e-5,
     if(i%%100 == 0) print (i/nrow(res_times))
     dd <- d %>%
       filter(date >= res_times$date[i]) %>%
-      arrange(date) %>%
-      mutate(vol_cum_m3 = cumsum(discharge_vol)) # calculate cumulative discharge
-    
-    if(is.na(dd$discharge_vol[1])|is.na(dd$volume_m3[1])) next
-    p <- tryCatch(Position(function(x) x >= dd$volume_m3, dd$vol_cum_m3),
-                  error = function(e) p <- NA_real_)
-    if(is.na(p)){
-      res_times$iTR[i] <- NA
-      next
-    }
-    res_times$iTR[i] <- as.numeric(dd$datetime[p+1] - dd$datetime[1], 
-                                   units = 'days')
+      arrange(datetime) %>%
+      mutate(vol_cum_m3 = cumsum(discharge_vol),# calculate cumulative discharge
+             vol_diff = volume_m3 - vol_cum_m3) # find when it exceeds system volume
+    ddd <- dd %>% 
+      filter(vol_diff <= 0)
+    p <- as.numeric(ddd$datetime[1] - dd$datetime[1], units = 'days')
+    res_times$iTR[i] <- p
+    # if(is.na(dd$discharge_vol[1])|is.na(dd$volume_m3[1])) next
+    # p <- tryCatch(Position(function(x) x >= dd$volume_m3, dd$vol_cum_m3),
+    #               error = function(e) p <- NA_real_)
+    # if(is.na(p)){
+    #   res_times$iTR[i] <- NA
+    #   next
+    # }
+    # res_times$iTR[i] <- as.numeric(dd$datetime[p+1] - dd$datetime[1], 
+    #                                units = 'days')
   }
   
   vol = median(d$volume_m3, na.rm = T)

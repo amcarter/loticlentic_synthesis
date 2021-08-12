@@ -29,10 +29,13 @@ In this study we examine the behavior of ~300 streams from the powell center dat
 
 ### Approach:
 1. Quantify stream timeseries as lotic or lentic using the integrated residence time based classification system developed by Jones et al. 2017:
-$$V_c = \int_{t_0}^{t_n} Q_j dt = V_{j=n} $$
-$$iT_{R0} = t_n - t_0$$
-where $V_c$ is the cumulative volume of discharge starting at time $t=0$ up until time $t=n$ where $n$ is the time at which this cumulative discharge is equal to the entire system volume ($V_j$) at time $n$. The integrated residence time ($iT_R$) at $t=0$ is then calculated as the difference between $t_0$ and $t_n$.
+$$V_{cum} = \sum_{t_1}^{t_n} Q_t \Delta t \ge V_{t_n}$$ 
+
+
+$$iT_{R0} = t_n - t_0 = n * \Delta t$$
+where $V_{cum}$ is the cumulative volume of discharge starting at time $t=0$ up until time $t=n$ where $n$ is the time at which this cumulative discharge exceeds the entire system volume ($V_t$) at time $n$. The integrated residence time ($iT_R$) at $t=0$ is then calculated as the difference between $t_0$ and $t_n$.
 To classify a system as lotic or lentic, we plot $iT_R$ against the total system volume along with thresholds for lotic and lentic systems based on the median system volume $\overline{V}$ (Jones et al 2017):
+
 $$iT_{R, lentic}=1.157 *10^{-3}(\overline{V}^{0.6699})$$
 $$iT_{R, lotic}=2.894*10^{-5}(\overline{V}^{0.6699})$$
 These thresholds define areas of lotic, lentic, and intermediate behavior:

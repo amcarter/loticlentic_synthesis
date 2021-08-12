@@ -36,6 +36,7 @@ d <- d %>%
          date = as.Date(solar_time))
 daily <- d %>%
   select(-dateTimeUTC, -solar_time, -lat, -lon) %>%
+  mutate(value = ifelse(value <= -1000, NA, value))%>%
   group_by(regionID, sitecode, date, variable) %>%
   summarize(mean = mean(value, na.rm = T),
             sdev = sd(value, na.rm = T), 
@@ -44,22 +45,20 @@ daily <- d %>%
   ungroup() %>%
   pivot_wider(id_cols = c('regionID', 'sitecode', 'date'), 
               names_from = 'variable', values_from = c('mean', 'sdev', 'amp')) %>%
-  rename(DO_amp = amp_DO_mgL) %>%
-  select(-starts_with('amp'))
+  select(regionID, sitecode, date, depth_m = mean_Depth_m, discharge_m3s = 
+           mean_Discharge_m3s, DO.obs = mean_DO_mgL, DO.sat = mean_satDO_mgL, 
+         light_PAR = mean_Light_PAR, temp.water = mean_WaterTemp_C, depth_sd = 
+           sdev_Depth_m, discharge_sd = sdev_Discharge_m3s, DO.obs_sd = sdev_DO_mgL, 
+           DO.sat_sd = sdev_satDO_mgL, light_PAR_sd = sdev_Light_PAR,
+           temp.water_sd = sdev_WaterTemp_C, DO.amp = amp_DO_mgL)
 
-day_cols<- c('regionID', 'sitecode', 'date', 'depth_m', 'discharge_m3s', 
-             'DO.obs', 'light_PAR', 'DO.sat', 'temp.water', 'depth_sd', 
-             'discharge_sd', 'DO.obs_sd', 'light_PAR_sd', 'DO.sat_sd', 
-             'temp.water_sd', 'DO.amp')
-
-colnames(daily) <- day_cols
 widths <- select(meta_dat, sitecode = Site_ID, width_m = Width)   
 rt_dat <- d %>% pivot_wider(id_cols = c('regionID', 'sitecode', 
                                         'date', 'solar_time'), 
                             names_from = 'variable', values_from = 'value') %>% 
   left_join(mod_dat, by = c('sitecode', 'date')) %>%
   select(regionID, sitecode, datetime = solar_time, depth_m = Depth_m, 
-         discharge_m3s = Discharge_m3s, K600) %>%
+         discharge_m3s = Discharge_m3s, temp.water = WaterTemp_C, K600) %>%
   left_join(widths, by = 'sitecode') 
   
 sites <- unique(d$sitecode)
@@ -97,22 +96,20 @@ for(f in filelist[2:22]){
     ungroup() %>%
     pivot_wider(id_cols = c('regionID', 'sitecode', 'date'), 
                 names_from = 'variable', values_from = c('mean', 'sdev', 'amp')) %>%
-    rename(DO_amp = amp_DO_mgL) %>%
-    select(-starts_with('amp'))
+    select(regionID, sitecode, date, depth_m = mean_Depth_m, discharge_m3s = 
+             mean_Discharge_m3s, DO.obs = mean_DO_mgL, DO.sat = mean_satDO_mgL, 
+           light_PAR = mean_Light_PAR, temp.water = mean_WaterTemp_C, depth_sd = 
+             sdev_Depth_m, discharge_sd = sdev_Discharge_m3s, DO.obs_sd = sdev_DO_mgL, 
+           DO.sat_sd = sdev_satDO_mgL, light_PAR_sd = sdev_Light_PAR,
+           temp.water_sd = sdev_WaterTemp_C, DO.amp = amp_DO_mgL)
   
-  day_cols<- c('regionID', 'sitecode', 'date', 'depth_m', 'discharge_m3s', 
-               'DO.obs', 'light_PAR', 'DO.sat', 'temp.water', 'depth_sd', 
-               'discharge_sd', 'DO.obs_sd', 'light_PAR_sd', 'DO.sat_sd', 
-               'temp.water_sd', 'DO.amp')
-  
-  colnames(daily) <- day_cols
   widths <- select(meta_dat, sitecode = Site_ID, width_m = Width)   
   rt_dat <- d %>% pivot_wider(id_cols = c('regionID', 'sitecode', 
                                           'date', 'solar_time'), 
                               names_from = 'variable', values_from = 'value') %>% 
     left_join(mod_dat, by = c('sitecode', 'date')) %>%
     select(regionID, sitecode, datetime = solar_time, depth_m = Depth_m, 
-           discharge_m3s = Discharge_m3s, K600) %>%
+           discharge_m3s = Discharge_m3s, temp.water = WaterTemp_C, K600) %>%
     left_join(widths, by = 'sitecode') 
   
   sites <- unique(d$sitecode)
