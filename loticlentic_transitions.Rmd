@@ -1,0 +1,133 @@
+---
+title: "Lotic to lentic transitions in stream ecosystems"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
+source('C:/Users/Alice Carter/git/loticlentic_synthesis/src/analyze/calculate_integrated_residence_time.R')
+
+```
+
+### Background
+Aquatic ecosystems are typically classified as either flowing (lotic) or not flowing (lentic).Streams and rivers are typically thought of as flowing ecosystems, however, it is increasingly being recognized that these ecosystems frequently experience lentic conditions at different spatial and temporal scales. Lotic to lentic transitions are important for ecological processes. Flowing water mixes the water column and distributes access to nutrients and electron acceptors, it is also essential for some organisms survival. Water flow can play an important role in determining the ecological community that establishes in an aquatic ecosystem. When turbulence is high, it is difficult or impossible for a pelagic primary producer community to establish due to continuous flushing downstream as well as limited access to light due to turbidity and mixing below the light layer. Additionally, the high disturbance regime may favor primary producers that are able to secure themselves in the habitat to rocks or other stream bed substrates such as macrophytes. These represent the immediate and longer term consequences of a lotic system transitioning to a low or no flow, lentic state. 
+
+In addition to constraining the aquatic community and therefore overall energetic rates and pathways, flow conditions are important for the life history strategies of many organisms. When flow decreases, the supply of oxygen and essential nutrients may decrease below demand, leading to hypoxia and a general shift to a more reduced state as well as depletion of other resources. This alters the rate and nature of carbon cycling as well as the sutability of aquatic habitats for animals. 
+
+Methods in stream ecology are not developed for studying lentic ecosystems. Most rely on the assumptions of advective flow and a well mixed water column. As a result, lentic habitats in stream ecosystems are poorly understood and underrepresented in the aquatic literature. 
+
+In this study we examine the behavior of ~300 streams from the powell center database to understand how prevalent lotic to lentic transitions are across different types of stream ecosystems. Further, we study shifts in the ecosystem metabolism and oxidation state that are associated with these transitions on different timescales.
+
+
+### Predictions: {-}
+1. Short periods of lenticity will result in poor mixing of the water column and a draw down of nutrients and electron acceptors through increased ecosystem respiration. This will be reflected by a decrease in oxygen in the hours to days following a transition
+2. Extended or frequent periods of lenticity will result in higher carbon and sediment storage, greater production of greenhouse gasses and will favor planktonic over benthic primary producer communities. This will be reflected by higher GHG concentrationsand and higher Chl a concentrations in lentic streams. Other possible observations would be increased respiration following a transition to lentic habitat up until oxygen limitation is reached and a decrease in the autocorrelation of primary productivity if the autotrophic community shifts toward shorter lived phytoplankton that do not accrue biomass like macrophytes do.  
+
+
+
+### Approach:
+1. Quantify stream timeseries as lotic or lentic using the integrated residence time based classification system developed by Jones et al. 2017:
+$$V_c = \int_{t_0}^{t_n} Q_j dt = V_{j=n} $$
+$$iT_{R0} = t_n - t_0$$
+where $V_c$ is the cumulative volume of discharge starting at time $t=0$ up until time $t=n$ where $n$ is the time at which this cumulative discharge is equal to the entire system volume ($V_j$) at time $n$. The integrated residence time ($iT_R$) at $t=0$ is then calculated as the difference between $t_0$ and $t_n$.
+To classify a system as lotic or lentic, we plot $iT_R$ against the total system volume along with thresholds for lotic and lentic systems based on the median system volume $\overline{V}$ (Jones et al 2017):
+$$iT_{R, lentic}=1.157 *10^{-3}(\overline{V}^{0.6699})$$
+$$iT_{R, lotic}=2.894*10^{-5}(\overline{V}^{0.6699})$$
+These thresholds define areas of lotic, lentic, and intermediate behavior:
+```{r, echo=FALSE, fig.align='center'}
+plot(1, xlim = c(1, 10000), ylim = c(0.00003, 1), log = 'xy', type = 'n',
+     xlab = 'System volume (m3)', ylab = 'Integrated residence time (d)')
+x <- seq(.1, 20000, length.out = 100)
+lines(x, 1.157 * 10^-3 * x^0.6699, col = 'sienna')
+lines(x, 2.894 * 10^-5 * x^0.6699, col = 'darkblue')
+text(1, .8, labels = 'Lentic', col = 'sienna', adj = c(0,1), cex = 1.2)
+text(10000, 1e-4, labels = 'Lotic', col = 'darkblue', adj = c(1,1), cex = 1.2)
+text(100, .003, labels = 'Intermediate', adj = c(.5,0), cex = 1.2)
+```
+Notes (a) These thresholds are defined for lotic systems using the maximum velocity of flowing water for zooplankton reproduction (v = 0.4 m/s) and for lentic systems using the velocity when a system is hydrologically disconnected from the floodplain (v = 0.01 m/s). These thresholds are from Jones et al 2017; I will use them as starting points and adjust if I need to. (b) This model calculates cumulative discharge based on the upstream end of the reach, but because we are interested in metabolism and other system characteristics that measure the habitat upstream of our sensors, I am completeing the calculation for the downstream end of the reach. I don't see a reason why this would be a problem, but it might be worth revisiting.
+
+2. Write mathematical equations that describe what we expect to observe after a transition from lotic to lentic (Quantify predictions)
+
+3. Update model based on data from streams in the stream pulse and powell center datasets. Do we observe the behavior we expect? Where do the pattern deviate from our predictions?
+
+
+### Example dataset
+This example is from USGS site on Millsboro outlet, DE. The next site I plan to test is NHC, to see how the iTR metric behaves in a system that I know well.
+
+```{r echo = FALSE}
+# read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/powell_data_import/compiled_daily_model_results.csv')
+# dat <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/example_iTR_calculation_site.csv', 
+#                 guess_max = 100000)
+# dat <- dat[14961:nrow(dat),]
+rtimes <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/example_iTR_calculation_output.csv')%>%
+  arrange(date)
+ll_thresholds <- calc_LL_thresholds(median(rtimes$volume_m3, na.rm = T))
+plot(rtimes$date, rtimes$iTR, log = 'y', type = 'l', ylim = c(0.05, 10),
+     ylab = 'Integrated residence time (days)', xlab = 'date')
+mtext('Lotic', 1, -1.2, adj = 0.02, cex = 1.2, col = 'darkblue')
+mtext('Lentic', 3, -1.2, adj = 0.02, cex = 1.2, col = 'sienna')
+
+abline(h = ll_thresholds$lotic, col = 'darkblue', lwd = 1.5)
+abline(h = ll_thresholds$lentic, col = 'sienna', lwd = 1.5)
+```
+
+It may also be useful to look at the shape of the residence time distribution:
+```{r}
+plot(density(rtimes$iTR, na.rm = T), log = 'x', xlim = c(0.05, 10),
+     xlab = 'Integrated residence time (days)', 
+     main = 'Residence time distribution over 5 years')
+mtext('Lotic', 3, -1.5, adj = 0.02, cex = 1.2, col = 'darkblue')
+mtext('Lentic', 3, -1.5, adj = 0.98, cex = 1.2, col = 'sienna')
+
+abline(v = ll_thresholds$lotic, col = 'darkblue', lwd = 1.5)
+abline(v = ll_thresholds$lentic, col = 'sienna', lwd = 1.5)
+```
+
+It looks like these thresholds are too conservative to be useful for my analysis, at least for this stream. 
+Next steps:
+- Complete calculation for all streams in powell center dataset.
+- Calibrate thresholds based on (a) other literature values for lotic and lentic velocities and (b) knowledge of specific sites (e.g. New Hope Creek)
+- Compile stats on the distributions of residence times, the frequency and duration of lentic events
+
+### Model ideas
+
+$$DO_t = DO_{t-1} + f(iT_{Rt}, \sum_{t-n}^{t-1} iT_{Rt})$$
+
+Where $DO_t$ changes at each timestep as some function of the current residence time and the past residence times for some time $n$ into the past. It would be interesting to test both a function of the actual residence times (normalized to system size) as well as a binary lotic lentic variable, in which case the sum over the past n days would represent the total number of days spent as a lentic system. As a starting point, I will build models for both daily dissolved oxygen concentrations as well as models of ER and GPP.  
+
+Another possibility here would be to quantify the impact of cumulative lentic behavior or of lentic behavior some time in the past using the methods in Ogle et al 2015.
+
+### Residence time stats across sites:
+```{r, include = FALSE, echo = FALSE}
+dat <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/powell_data_import/compiled_daily_model_inputs.csv')
+mods <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv', 
+                 guess_max = 100000) %>%
+  select(sitecode, date, GPP, ER, DO.obs, DO.psat, depth, temp.water, discharge, velocity) 
+
+
+site_summary <- dat %>%
+  select(sitecode, date, class) %>%
+  left_join(mods, by = c('sitecode', 'date')) %>%
+  group_by(sitecode) %>%
+  summarize(lentic_pct = sum(class == 'lentic', na.rm = T)/n(),
+            lotic_pct = sum(class == 'lotic', na.rm = T)/n(),
+            across(c(-date, -class), mean, na.rm = T))
+
+
+site_dat <- readRDS('C:/Users/Alice Carter/git/loticlentic_synthesis/data/phil_powell_data/lotic_site_info_full.rds') %>%
+  select(sitecode = Site_ID, Name, Width, WS_area_km2)
+site_summary <- left_join(site_summary, site_dat, by = 'sitecode')
+```
+```{r}
+plot(site_summary$lentic_pct, site_summary$DO.obs, 
+     xlab = 'percent of lentic days', pch = 19)
+identify(site_summary$lentic_pct, site_summary$DO.obs,
+         labs = site_summary$Name)
+```
+### References
+Jones, A.E., B.R. Hodges, J.W. McClelland, A.K. Hardison, and K.B. Moffett. 2017. Residence-time-based classification of surface water systems. Water Resources Research, 53, p5567-5584.
+
+
+
