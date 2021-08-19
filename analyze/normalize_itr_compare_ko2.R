@@ -7,7 +7,7 @@ source('src/analyze/calculate_integrated_residence_time.R')
 #     range from 0 to 1 for all systems
 
 # read in data with calculated times
- 
+
 dat <- read_csv('data/powell_data_import/compiled_daily_model_inputs.csv')
 ll <- dat %>%
   group_by(sitecode) %>%
@@ -15,7 +15,7 @@ ll <- dat %>%
 
 ll <- bind_cols(ll, log(calc_LL_thresholds(ll$vol))) 
 
-# transform so that lotic = 1 and lentic = 10
+# transform so that lotic = 0 and lentic = 1
 ll <- ll %>%
   mutate(slope = 1/(lentic - lotic), 
          intercept = -lotic * slope) %>%
@@ -23,6 +23,7 @@ ll <- ll %>%
 
 d <- left_join(dat, ll, by = 'sitecode') %>%
   # filter(!is.na(iTR), class == 'lentic') %>%
+  filter(iTR!=0) %>%
   mutate(iT_norm = (intercept + slope * log(iTR)))
 
 # plot(density(d$iT_norm, na.rm = T))
@@ -31,24 +32,31 @@ d <- left_join(dat, ll, by = 'sitecode') %>%
 
 # 2. Calculate turbulence based on k (gas exchange velocity in m/d)
 #     I am going to use k600 for now
-
-mod <- read_csv('data/powell_data_import/compiled_daily_model_results.csv')
-m <- mod %>%
+filled <- read_csv('data/phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv') %>%
+  select(-ends_with('Rhat'))
+m <- filled %>%
   mutate(k600 = depth * K600, 
          kO2 = streamMetabolizer::convert_k600_to_kGAS(k600, temp.water)) %>%
-  select(sitecode = site_name, date, GPP, ER, K600, kO2)
-d <- left_join(d, m, by = c('sitecode', 'date')) %>%
+  select(sitecode, date, GPP, ER, K600, kO2)
+# mod <- read_csv('data/powell_data_import/compiled_daily_model_results.csv')
+d <- left_join(m, d, by = c('sitecode', 'date')) %>%
   select(-iTR, -slope, -intercept)
 
+write_csv(d, 'data/normalized_residence_times_and_kO2.csv')
 
+dd = d[seq(1, nrow(d), 5), ]
 
 par(mfrow = c(2,2))
-plot(d$iT_norm, d$DO.sat, pch = 20, col = alpha('black', 0.3))
-plot(d$kO2, d$DO.sat, pch = 20, col = alpha('black', 0.3))
-plot(d$iT_norm, d$DO.obs, pch = 20, col = alpha('black', 0.3))
-plot(d$kO2, d$DO.obs, pch = 20, col = alpha('black', 0.3))
+plot(dd$iT_norm, dd$DO.obs)#, pch = 20)#, col = alpha('black', 0.3))
+plot(dd$kO2, dd$DO.obs, log = 'x')#at, pch = 20, col = alpha('black', 0.3))
+plot(dd$iT_norm, dd$DO.obs/dd$DO.sat)#, pch = 20, col = alpha('black', 0.3))
+plot(dd$kO2, dd$DO.obs/dd$DO.sat, log = 'x')#, pch = 20, col = alpha('black', 0.3))
 
-ggplot(d, aes(iT_norm, DO.sat, col = kO2)) +
+ggplot(dd, aes(iT_norm, DO.obs/DO.sat, col = log(kO2))) +
   geom_point()
-ggplot(d, aes(DO.obs, DO.sat, col = temp.water)) +
+ggplot(dd, aes(DO.obs, DO.sat, col = temp.water)) +
   geom_point()
+
+ggplot(dd, aes(iT_norm, log(kO2), col = DO.obs/DO.sat)) +
+  geom_point(size = 0.2)
+

@@ -72,7 +72,8 @@ calculate_iTR <- function(dat, lotic_th = 2.894e-5,
            reach_length_m = 3 * velocity_ms/KO2 * 60 * 60 * 24, # s/d
            volume_m3 = width_m * reach_length_m * depth_m, 
            discharge_vol = discharge_m3s * 60 * 15,
-           date = as.Date(datetime))
+           date = as.Date(datetime)) %>%
+    arrange(datetime)
   res_times <- tibble::tibble(
     date = seq(from = d$date[1], to = d$date[nrow(d)], by = 'day')) %>%
     mutate(iTR = NA_real_)

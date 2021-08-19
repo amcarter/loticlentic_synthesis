@@ -4,8 +4,9 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
 library(tidyverse)
+library(viridis)
 setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
 source('C:/Users/Alice Carter/git/loticlentic_synthesis/src/analyze/calculate_integrated_residence_time.R')
 
@@ -59,7 +60,7 @@ Notes (a) These thresholds are defined for lotic systems using the maximum veloc
 ### Example dataset
 This example is from USGS site on Millsboro outlet, DE. The next site I plan to test is NHC, to see how the iTR metric behaves in a system that I know well.
 
-```{r echo = FALSE}
+```{r}
 # read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/powell_data_import/compiled_daily_model_results.csv')
 # dat <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/example_iTR_calculation_site.csv', 
 #                 guess_max = 100000)
@@ -103,7 +104,56 @@ Where $DO_t$ changes at each timestep as some function of the current residence 
 Another possibility here would be to quantify the impact of cumulative lentic behavior or of lentic behavior some time in the past using the methods in Ogle et al 2015.
 
 ### Residence time stats across sites:
-```{r, include = FALSE, echo = FALSE}
+
+After scaling all of the residence times so that the lotic threshold = 0 and lentic = 1, we can compare across sites. The distributions of residence times span the full range. In general, more lentic sites (nrt > 1) have lower k_O2. 
+
+```{r, results = FALSE, message = FALSE, warning= FALSE}
+nres <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/normalized_residence_times_and_kO2.csv',
+                 guess_max = 1000000)
+ss <- nres %>% group_by(sitecode) %>%
+  summarize(log_kO2 = log(median(kO2, na.rm = T)),
+            med_nrt = median(iT_norm, na.rm = T),
+            DO_pctsat = median(DO.obs/DO.sat, na.rm = T),
+            med_GPP = median(GPP, na.rm = T),
+            med_ER = median(ER, na.rm = T)) %>%
+  ungroup() 
+left_join(nres, ss, by = 'sitecode') %>%
+ggplot(aes(iT_norm, col = log_kO2, group = sitecode)) +
+  geom_density() + 
+  ylim(0, 11) +
+  xlab('normalized residence time') +
+  scale_color_gradientn(colors = rainbow(5))
+```
+
+### Across site variation
+Looking at the medians across all sites, we see that most sites span the range between lake like (slow turnover, low turbulence) to stream like (fast turnover, high turbulence). There does not appear to be a strong relationship between median oxygen depletion and lotic/lentic behavior across sites.
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(ss, aes(med_nrt, log_kO2, col = DO_pctsat)) +
+  geom_point(size = 2) +
+  scale_color_gradientn(colors = plasma(4), na.value = 'white') +
+  xlab('turnover time') +
+  ylab('turbulence')
+
+d <- left_join(nres, ss, by = 'sitecode') %>%
+  filter(sitecode %in% c('nwis_08052700','nwis_02264000', 'nwis_06893890', 'nwis_11044000'))
+```
+
+### Within site variation
+Daily values at four example lentic sites
+```{r, warning = FALSE}
+ggplot(d, aes(iT_norm, log(kO2), col = DO.obs/DO.sat)) +
+  geom_point() +
+  scale_color_gradientn(colors = plasma(4), na.value = 'white') +
+  xlab('turnover time') +
+  ylab('turbulence') +
+  facet_wrap(~sitecode)
+  
+```
+
+
+
+```{r, include = FALSE}
 dat <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/powell_data_import/compiled_daily_model_inputs.csv')
 mods <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv', 
                  guess_max = 100000) %>%
@@ -116,19 +166,28 @@ site_summary <- dat %>%
   group_by(sitecode) %>%
   summarize(lentic_pct = sum(class == 'lentic', na.rm = T)/n(),
             lotic_pct = sum(class == 'lotic', na.rm = T)/n(),
-            across(c(-date, -class), mean, na.rm = T))
+            across(c(-date, -class), median, na.rm = T))
 
 
 site_dat <- readRDS('C:/Users/Alice Carter/git/loticlentic_synthesis/data/phil_powell_data/lotic_site_info_full.rds') %>%
   select(sitecode = Site_ID, Name, Width, WS_area_km2)
 site_summary <- left_join(site_summary, site_dat, by = 'sitecode')
 ```
+
+
+
+The fraction of lentic days vs dissolved oxygen and ER
+
 ```{r}
-plot(site_summary$lentic_pct, site_summary$DO.obs, 
-     xlab = 'percent of lentic days', pch = 19)
-identify(site_summary$lentic_pct, site_summary$DO.obs,
-         labs = site_summary$Name)
+par(mfrow = c(1 , 2))
+plot(site_summary$lentic_pct, site_summary$DO.psat, 
+     xlab = 'percent of lentic days', ylab = 'median DO (%sat)',  pch = 19)
+plot(site_summary$lentic_pct, site_summary$ER, 
+     xlab = 'percent of lentic days', ylab = 'median ER',  pch = 19)
+
 ```
+
+
 ### References
 Jones, A.E., B.R. Hodges, J.W. McClelland, A.K. Hardison, and K.B. Moffett. 2017. Residence-time-based classification of surface water systems. Water Resources Research, 53, p5567-5584.
 
