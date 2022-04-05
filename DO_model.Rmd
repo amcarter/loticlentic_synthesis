@@ -1,0 +1,116 @@
+---
+title: "DO model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dygraphs)
+library(xts)
+library(lubridate)
+source("~/../git/oxygen_proc_model/src/batch_nhd_retrevial.R")
+source("~/../git/oxygen_proc_model/src/oxygen_dynamics_functions.R")
+```
+
+## Oxygen process model
+Start with a mass balance equation for oxygen concentration C:
+
+$$\frac{\delta VC}{\delta t} = -\left(\frac{\delta q_x}{\delta x} + \frac{\delta q_y}{\delta y} + \frac{\delta q_z}{\delta z}\right) + S$$
+
+where:
+$V$ = volume
+$C$ = concentration
+$q$ = mass fluxes due to advective and dispersive transport
+$S$ = sinks and sources
+
+Assume:
+Uniform flow/well mixed water column:
+
+$$\frac{\delta q_x}{\delta x} + \frac{\delta q_y}{\delta y} = 0$$
+$$\frac{\delta VC}{\delta t} = -\frac{\delta q_z}{\delta z} + S$$
+
+Integrate with respect to z and define fluxes per unit ground area A assuming the channel is rectangular with a depth of D
+
+$$\frac{\delta H\overline{C}}{\delta t} = q(H) - q(0) + \int_0^H Sdz$$
+
+where:
+$\overline{C}$ is the depth-averaged concentration,
+$H$ is the depth 
+$q(H) = k(C_{sat} - \overline{C})$ is the exchange of oxygen with the atmosphere 
+$B(t) = -q(0) + \int_0^DSdz$ represents biological production and consumption of oxygen 
+
+If we assume this production and consumption is all taking place at the stream bed, $B(t) = -q(0)$ and the rate of uptake will be limited by the mass transfer coefficient to the stream bed (which is a function of stream bed slope $s$, depth $H$, the kinematic viscosity of water $\nu$, and the molecular diffusion coefficient of O2 in water $D_{O2}$, see Grant et al 2019). 
+
+$$ k_m = 0.17 \sqrt{gHs} * Sc^{-2/3} $$
+$$ Sc = \nu/D_{O2}$$
+
+The biological uptake of $O_2$ at the sediments is then a function of oxygen concentration in the water column, $\overline{C}$, delivery to the sediments $k_m$, and the biological rate of uptake $u_{sed}$. 
+
+$$q(0) = \overline{C} * k_m * \alpha$$
+$$\alpha = 1 -\frac{1}{u_{sed}/k_m + 1}, 0\leq\alpha\leq1$$
+Thus, change in $O_2$ is proportional to:
+
+$$\frac{dH\overline{C}}{dt} = k_{O2}(C_{sat} - \overline{C}) - k_m * \overline{C} * \alpha$$
+To account for the effect of changing residence times, or the lenticity of the system, we can multiply the rate by the normalized metric for system residence time.
+
+
+Note: I am not sure how I should actually go about incorporating residence time into the equation. Really what is changing is the dt of each timestep, which is why it feels reasonable to start with having the oxygen change proportionally to the normalized integrated residence time. Some feedback here would be very helpful.
+
+
+
+## Example Stream: 
+# New Hope Creek
+
+```{r, include = FALSE}
+dat <- read_csv("C:/Users/Alice Carter/git/nhc_50yl/data/metabolism/processed/NHC.csv",
+                guess_max = 10000)
+dat <- filter(dat, year(DateTime_UTC) == 2019)
+
+# load site data
+site <- read_csv("C:/Users/Alice Carter/git/nhc_50yl/data/siteData/NHCsite_metadata.csv")[1,] %>%
+  select(sitecode, latitude, longitude, CRS, slope)
+nhc_slope <- site$slope
+# xts(dat$DO.obs, dat[,1, drop = T]) %>%
+#   dygraph(ylab = "DO (mg/L)", main = "NHC dissolved oxygen")
+```
+
+```{r, echo = FALSE}
+dat %>% 
+  filter(month(dat$DateTime_UTC) == 3) %>%
+  ggplot(aes(DateTime_UTC, DO.obs)) +
+  geom_line() 
+dat %>% 
+  filter(month(dat$DateTime_UTC) == 3) %>%
+  ggplot(aes(DateTime_UTC, log(discharge))) +
+  geom_line() 
+```
+
+```{r}
+m_dat <- dat %>%
+  # filter(!is.na(DO.obs)) %>%
+  # select(DateTime_UTC, DO.obs, avg_velocity, DO.sat, depth, temp.water) %>%
+  mutate(slope = nhc_slope,
+         # v_ms = calc_vel_from_disch(discharge),
+         k600_mean = calc_k600_raymond5(slope, avg_velocity), # m/d
+         # k600_min = calc_k600_raymond5(slope, avg_velocity)[2],
+         # k600_max = calc_k600_raymond5(slope, avg_velocity)[3],
+         k_O2_mean = kO2fromk600(k600_mean, temp.water),
+         Sc_O2 = marelac::gas_schmidt(species = 'O2', t = temp.water),
+         k_m = 0.17 * sqrt(depth * slope * 9.8) * Sc_O2 ^ (-2/3) * 60 * 60 * 24,
+         alpha = 1 - 1/(1 + 1),
+         q_sed_gm2d = k_m * DO.obs * alpha,
+         q_D_gm2d = k_O2_mean * (DO.sat - DO.obs), # m/d * mg/L  = g/m2d
+         dHCdt_gm2d = c(NA, diff(dat$DO.obs))*depth/15*60*24, # mg/L/min * 60 min/h * 24 h/d
+         B_gm2d = dHCdt_gm2d - q_D_gm2d) # biological timeseries mg/m2/d
+         
+# m_dat %>%
+#   filter(month(DateTime_UTC) == 3) %>%
+#   ggplot(aes(DateTime_UTC, dHCdt_gm2d)) +
+#   geom_line() +
+#   geom_line(aes(DateTime_UTC, q_D_gm2d), col = 2)+
+#   geom_line(aes(DateTime_UTC, q_sed_gm2d), col = 3)
+```
+
+I'm still working on where to go from here. The numbers I am getting for flux at the sediment interface are not reasonable, even before adding in the residence time metric. I need to spend some more time thinking through these equations/units, but I wanted to check in and see what you think of this direction. 
+

@@ -7,7 +7,7 @@ source('src/analyze/calculate_integrated_residence_time.R')
 #     range from 0 to 1 for all systems
 
 # read in data with calculated times
-
+# iTR is in days
 dat <- read_csv('data/powell_data_import/compiled_daily_model_inputs.csv')
 ll <- dat %>%
   group_by(sitecode) %>%
@@ -40,7 +40,8 @@ m <- filled %>%
   select(sitecode, date, GPP, ER, K600, kO2)
 # mod <- read_csv('data/powell_data_import/compiled_daily_model_results.csv')
 d <- left_join(m, d, by = c('sitecode', 'date')) %>%
-  select(-iTR, -slope, -intercept)
+  rename(iTR_days = iTR) %>%
+  select(-slope, -intercept)
 
 write_csv(d, 'data/normalized_residence_times_and_kO2.csv')
 

@@ -58,7 +58,8 @@ Notes (a) These thresholds are defined for lotic systems using the maximum veloc
 
 
 ### Example dataset
-This example is from USGS site on Millsboro outlet, DE. The next site I plan to test is NHC, to see how the iTR metric behaves in a system that I know well.
+This example is from USGS site on the Pecos River near Girvin, TX.
+
 
 ```{r}
 # read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/powell_data_import/compiled_daily_model_results.csv')
@@ -66,22 +67,30 @@ This example is from USGS site on Millsboro outlet, DE. The next site I plan to 
 #                 guess_max = 100000)
 # dat <- dat[14961:nrow(dat),]
 rtimes <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/example_iTR_calculation_output.csv')%>%
-  arrange(date)
+  arrange(date) %>%
+  filter(date < as.Date('2015-06-01'))
+kk <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/normalized_residence_times_and_kO2.csv') %>%
+  filter(sitecode == 'nwis_08446500') %>%
+  select(date, GPP, ER, K600, kO2)
 ll_thresholds <- calc_LL_thresholds(median(rtimes$volume_m3, na.rm = T))
-plot(rtimes$date, rtimes$iTR, log = 'y', type = 'l', ylim = c(0.05, 10),
+plot(rtimes$date, rtimes$iTR, log = 'y', type = 'l', ylim = c(0.02, 50),
      ylab = 'Integrated residence time (days)', xlab = 'date')
 mtext('Lotic', 1, -1.2, adj = 0.02, cex = 1.2, col = 'darkblue')
 mtext('Lentic', 3, -1.2, adj = 0.02, cex = 1.2, col = 'sienna')
 
 abline(h = ll_thresholds$lotic, col = 'darkblue', lwd = 1.5)
 abline(h = ll_thresholds$lentic, col = 'sienna', lwd = 1.5)
+
+rtimes <- rtimes %>%
+  mutate(iTR_norm = (iTR - ll_thresholds$lotic[1])/(ll_thresholds$lentic - ll_thresholds$lotic)) %>%
+  left_join(kk, by = 'date')
 ```
 
 It may also be useful to look at the shape of the residence time distribution:
 ```{r}
-plot(density(rtimes$iTR, na.rm = T), log = 'x', xlim = c(0.05, 10),
+plot(density(rtimes$iTR, na.rm = T), log = 'x', xlim = c(0.02, 100),
      xlab = 'Integrated residence time (days)', 
-     main = 'Residence time distribution over 5 years')
+     main = 'Residence time distribution over 4 years')
 mtext('Lotic', 3, -1.5, adj = 0.02, cex = 1.2, col = 'darkblue')
 mtext('Lentic', 3, -1.5, adj = 0.98, cex = 1.2, col = 'sienna')
 
@@ -126,14 +135,17 @@ ggplot(aes(iT_norm, col = log_kO2, group = sitecode)) +
 ```
 
 ### Across site variation
-Looking at the medians across all sites, we see that most sites span the range between lake like (slow turnover, low turbulence) to stream like (fast turnover, high turbulence). There does not appear to be a strong relationship between median oxygen depletion and lotic/lentic behavior across sites.
+Looking at the medians across all sites, we see that most sites span the range between lake like (slow turnover, low turbulence) to stream like (fast turnover, high turbulence). There does not appear to be a strong relationship between median oxygen depletion and lotic/lentic behavior across sites. Daily data from the pecos river are overlain as a blue line.
 
 ```{r echo = FALSE, warning = FALSE}
-ggplot(ss, aes(med_nrt, log_kO2, col = DO_pctsat)) +
+ggplot(ss, aes(med_nrt, log_kO2)) +
   geom_point(size = 2) +
-  scale_color_gradientn(colors = plasma(4), na.value = 'white') +
-  xlab('turnover time') +
-  ylab('turbulence')
+  xlim(-0.45, 1.5) +
+  # geom_line(data = rtimes, aes(iTR_norm, log(kO2)), col = 'steelblue')+
+  # scale_color_gradientn(colors = plasma(4), na.value = 'white') +
+  xlab('normalized residence time') +
+  ylab('turbulence (kO2)') +
+  theme_bw()
 
 d <- left_join(nres, ss, by = 'sitecode') %>%
   filter(sitecode %in% c('nwis_08052700','nwis_02264000', 'nwis_06893890', 'nwis_11044000'))
@@ -148,7 +160,19 @@ ggplot(d, aes(iT_norm, log(kO2), col = DO.obs/DO.sat)) +
   xlab('turnover time') +
   ylab('turbulence') +
   facet_wrap(~sitecode)
-  
+
+ggplot(d, aes(GPP, ER, color = iT_norm)) +
+  geom_point()+
+  scale_color_gradientn(colors = plasma(4), na.value = 'white')
+
+plot(d$iTR_days, -d$ER, col = 'sienna',log = 'x', ylim = c(0, 50))
+points(d$iTR_days, d$GPP, col = 'forestgreen')
+
+plot(d$iTR_days, -d$GPP/d$ER, log = 'x', ylim = c(0, 2))
+plot(d$discharge_m3s, -d$ER, col = 'sienna',log = 'x', ylim = c(0, 50))
+points(d$discharge_m3s, d$GPP, col = 'forestgreen')
+
+plot(d$discharge_m3s, -d$GPP/d$ER, log = 'x', ylim = c(0, 1))
 ```
 
 
@@ -157,14 +181,16 @@ ggplot(d, aes(iT_norm, log(kO2), col = DO.obs/DO.sat)) +
 dat <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/powell_data_import/compiled_daily_model_inputs.csv')
 mods <- read_csv('C:/Users/Alice Carter/git/loticlentic_synthesis/data/phil_powell_data/lotic_gap_filled_dataframe_with_metadata.csv', 
                  guess_max = 100000) %>%
-  select(sitecode, date, GPP, ER, DO.obs, DO.psat, depth, temp.water, discharge, velocity) 
+  select(sitecode, date, GPP, ER, DO.obs, DO.psat, depth, temp.water, discharge, 
+         velocity) 
 
 
 site_summary <- dat %>%
-  select(sitecode, date, class) %>%
+  select(sitecode, date, iTR, class) %>%
   left_join(mods, by = c('sitecode', 'date')) %>%
   group_by(sitecode) %>%
-  summarize(lentic_pct = sum(class == 'lentic', na.rm = T)/n(),
+  summarize(iT_norm = median(iTR, na.rm = T),
+    lentic_pct = sum(class == 'lentic', na.rm = T)/n(),
             lotic_pct = sum(class == 'lotic', na.rm = T)/n(),
             across(c(-date, -class), median, na.rm = T))
 
@@ -179,6 +205,8 @@ site_summary <- left_join(site_summary, site_dat, by = 'sitecode')
 The fraction of lentic days vs dissolved oxygen and ER
 
 ```{r}
+
+
 par(mfrow = c(1 , 2))
 plot(site_summary$lentic_pct, site_summary$DO.psat, 
      xlab = 'percent of lentic days', ylab = 'median DO (%sat)',  pch = 19)

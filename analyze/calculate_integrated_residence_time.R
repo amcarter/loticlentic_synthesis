@@ -1,5 +1,5 @@
 # Calculate lotic and lentic behavior of stream reaches based on discharge
-# According to the integrated residence time calculations in Jones et al 2016
+# According to the integrated residence time calculations in Jones et al 2017
 
 library(tidyverse)
 setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
@@ -11,16 +11,17 @@ setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
 #   select(sitecode = Site_ID, Lat, Lon,
 #          Stream_PAR_sum, Disch_ar1, Disch_skew, MOD_ann_NPP, Width)
 # # make example dataset
-# d <- read_csv('data/powell_data_import/model_inputs/all_powell_data01.csv') %>%
-#   mutate(sitecode = str_replace(siteID, '-', '_')) %>%
-#   select(-siteID)
-# w <- which(d$sitecode %in% site_dat$sitecode)[1]
-# ss <- d$sitecode[w]
+# d <- read_csv('../autotrophic_rivers/data/pecos_instantaneous.dat') 
+# ss <- d$sitecode[1]
 # s <- d %>%
-#   filter(sitecode == ss) %>%
-#   pivot_wider(id_cols = c('regionID', 'sitecode', 'dateTimeUTC'),
-#               names_from = 'variable', values_from = 'value') %>%
-#   mutate(width_m = site_dat$Width[site_dat$sitecode==ss],
+#   mutate(dateTimeUTC = round.POSIXt(dateTimeUTC, units = 'mins')) %>%
+#   select(-datetime) %>% arrange(dateTimeUTC) %>%
+#   group_by(sitecode, dateTimeUTC) %>%
+#   summarize(across(everything(), mean, na.rm = T)) %>%
+#   ungroup()
+# s <- s %>%
+#   mutate(dateTimeUTC = as.POSIXct(dateTimeUTC),
+#          width_m = site_dat$Width[site_dat$sitecode==ss],
 #          lon = site_dat$Lon[site_dat$sitecode==ss],
 #          solar_time =
 #            streamMetabolizer::convert_UTC_to_solartime(dateTimeUTC, lon,
@@ -38,14 +39,13 @@ setwd('C:/Users/Alice Carter/git/loticlentic_synthesis/')
 #          discharge_m3s = Discharge_m3s, width_m, K600, temp.water = WaterTemp_C)
 # write_csv(s, 'data/example_iTR_calculation_site.csv')
 # dat <- read_csv('data/example_iTR_calculation_site.csv', guess_max = 100000)
-# dat <- dat[14961:nrow(dat),]
 
 
 # Function to calculate iTR
 # dataframe must contain columns: width_m, depth_m, discharge_m3s, K600
 # and datetime in either local or solar time.
 
-# calculate reach length as 3v/KO2, because we are interested in metabolism and 
+# calculate reach length as 3v/KO2, because we are interested in metabolism and
 #   oxygen as response variables and this captures the length of 90% turnover?
 #   diChappro 1992 I believe
 ## This should be Ko2 in the calculation (d-1)
@@ -122,3 +122,4 @@ calc_LL_thresholds <- function(vol, lotic_th = 2.894e-5, lentic_th = 1.157e-3){
   
   return(ll_rt_thresh)
 }
+
